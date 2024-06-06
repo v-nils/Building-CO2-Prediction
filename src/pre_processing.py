@@ -42,7 +42,7 @@ class DataModel:
         self.input_data = pd.read_csv(path_in, index_col='bef_id')
         self.output_data = pd.read_csv(path_out, index_col='energy_id')
 
-    def pre_process_data(self, test_size: float = 0.2) -> None:
+    def pre_process_data(self, test_size: float = 0.2, z_value: float = 3.) -> None:
         """
         Function to pre-process the input data including:
         - Filtering columns
@@ -84,8 +84,8 @@ class DataModel:
         z_scores_input = scaler.fit_transform(self.input_data)
         z_scores_output = scaler.fit_transform(self.output_data)
 
-        self.input_data = self.input_data[(z_scores_input < 3).all(axis=1)]
-        self.output_data = self.output_data[(z_scores_output < 3).all(axis=1)]
+        self.input_data = self.input_data[(z_scores_input < z_value).all(axis=1)]
+        self.output_data = self.output_data[(z_scores_output < z_value).all(axis=1)]
 
         drop_idx = list(set(self.input_data.index) ^ set(self.output_data.index))
 
@@ -157,8 +157,8 @@ class DataModel:
         y_values = self.output_data_scaled.iloc[:, 0]
 
         # Transrom to log
-        x_values = np.log(x_values)
-        y_values = np.log(y_values)
+        #x_values = np.log(x_values)
+        #y_values = np.log(y_values)
 
         slope, intercept, r_value, p_value, std_err = linregress(x_values, y_values)
 
@@ -184,7 +184,7 @@ class DataModel:
 
 if __name__ == '__main__':
     data_model = DataModel()
-    data_model.pre_process_data(test_size=0.2)
+    data_model.pre_process_data(test_size=0.2, z_value=1.7)
 
     data_model.compute_correlation()
     data_model.plot_correlation_matrix()
@@ -195,4 +195,4 @@ if __name__ == '__main__':
     for column in data_model.input_data.columns:
 
         data_model.plot_2d_correlation(column)
-        break
+
