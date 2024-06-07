@@ -10,17 +10,23 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.model_selection import train_test_split
 import seaborn as sns
 import matplotlib.pyplot as plt
-
+import scienceplots
 from pandas import DataFrame, Series
+
+plt.style.use(['science', 'ieee'])
 
 # GLOBAL VARIABLES
 project_path: str = os.path.abspath(__file__)
 root_path: str = os.path.dirname(os.path.dirname(project_path))
 
-data_path: str = os.path.join(root_path, 'data', 'pre_processed')
+data_path: str = os.path.join(root_path, 'data')
 
-_input_path: str = os.path.join(data_path, 'bef_input.csv')
-_output_path: str = os.path.join(data_path, 'energy_output.csv')
+_input_path: str = os.path.join(data_path, r'pre_processed\bef_input.csv')
+_output_path: str = os.path.join(data_path, r'pre_processed\energy_output.csv')
+
+path_corr_matrix: str = os.path.join(data_path, 'results', 'correlation_matrices')
+path_2d_corr: str = os.path.join(data_path, 'results', 'correlations')
+path_distribution: str = os.path.join(data_path, 'results', 'distributions')
 
 
 @dataclass
@@ -61,7 +67,8 @@ class DataModel:
         # Filter columns
         self.input_data = self.input_data[use_columns]
 
-        use_output_column: list[str] = ['e_total_site_energy_use_kbtu']
+        # 'e_site_energy_use_norm_kbtu', 'e_total_site_energy_use_kbtu
+        use_output_column: list[str] = ['e_site_energy_use_norm_kbtu']
         self.output_data = self.output_data[use_output_column]
 
         # Check if all columns are of type numeric
@@ -123,7 +130,7 @@ class DataModel:
         combined_data = pd.concat([self.input_data, self.output_data], axis=1)
         self.correlation = combined_data.corr()
 
-    def plot_correlation_matrix(self):
+    def plot_correlation_matrix(self, save_path: str | None = None):
         """
         Function to plot the correlation matrix
 
@@ -136,9 +143,12 @@ class DataModel:
         plt.figure(figsize=(16, 13))
         ax = sns.heatmap(self.correlation, annot=True)
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')  # Rotate x-axis labels
-        plt.show()
+        if save_path is not None:
+            plt.savefig(save_path)
+        else:
+            plt.show()
 
-    def plot_2d_correlation(self, x: str) -> None:
+    def plot_2d_correlation(self, x: str, save_path: str | None = None) -> None:
         """
         Function to plot the 2D correlation between two columns
 
@@ -155,10 +165,6 @@ class DataModel:
 
         x_values = self.input_data_scaled.loc[:, x]
         y_values = self.output_data_scaled.iloc[:, 0]
-
-        # Transrom to log
-        #x_values = np.log(x_values)
-        #y_values = np.log(y_values)
 
         slope, intercept, r_value, p_value, std_err = linregress(x_values, y_values)
 
@@ -179,7 +185,37 @@ class DataModel:
         ax.set_xlabel(x)
         ax.set_ylabel(self.output_data_scaled.columns[0])
         ax.set_title(f'Linear fit between {x} and {self.output_data_scaled.columns[0]}. P-value: {p_value:.4f} {significance}')
-        plt.show()
+
+        if save_path is not None:
+            plt.savefig(save_path)
+        else:
+            plt.show()
+
+    def plot_distribution(self, column: str, save_path: str | None = None) -> None:
+        """
+        Function to plot the distribution of a column
+
+        :param column: str: Name of the column
+
+        :return: None
+        """
+
+        if self.input_data_scaled is None:
+            raise ValueError('Data not loaded')
+
+        if column not in self.input_data_scaled.columns:
+            raise ValueError(f'{column} not in input data')
+
+        fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+        sns.histplot(self.input_data_scaled[column], ax=ax)
+        sns.kdeplot(self.input_data_scaled[column], color='red', ax=ax)
+        ax.set_title(f'Distribution of {column}')
+
+        if save_path is not None:
+            plt.savefig(save_path)
+
+        else:
+            plt.show()
 
 
 if __name__ == '__main__':
@@ -187,12 +223,16 @@ if __name__ == '__main__':
     data_model.pre_process_data(test_size=0.2, z_value=1.7)
 
     data_model.compute_correlation()
-    data_model.plot_correlation_matrix()
+    data_model.plot_correlation_matrix()#save_path=os.path.join(path_corr_matrix, 'correlation_matrix.png'))
 
     print(data_model.input_data_scaled.head())
     print(data_model.output_data_scaled.head())
 
     for column in data_model.input_data.columns:
 
-        data_model.plot_2d_correlation(column)
+        filename_2d_corr = f'{column}_2d_correlation.png'
+        filename_distribution = f'{column}_distribution.png'
+
+        data_model.plot_2d_correlation(column)#, save_path=os.path.join(path_2d_corr, filename_2d_corr))
+        data_model.plot_distribution(column)# , save_path=os.path.join(path_distribution, filename_distribution))
 
