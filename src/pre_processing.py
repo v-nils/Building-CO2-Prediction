@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import scienceplots
 from pandas import DataFrame, Series
 
-plt.style.use(['science', 'ieee'])
+#plt.style.use(['ieee'])
 
 # GLOBAL VARIABLES
 project_path: str = os.path.abspath(__file__)
@@ -217,6 +217,36 @@ class DataModel:
         else:
             plt.show()
 
+    def plot_boxplots(self, column: str, save_path: str | None = None) -> None:
+        """
+        Function to plot the boxplot of a column
+
+        :param column:
+        :param save_path:
+        :return:
+        """
+
+        if self.input_data_scaled is None:
+            raise ValueError('Data not loaded')
+
+        if column not in self.input_data_scaled.columns:
+            raise ValueError(f'{column} not in input data')
+
+        fig, ax = plt.subplots(1, 1, figsize=(6, 10))
+        sns.boxplot(
+            y=self.input_data_scaled[column],
+            ax=ax,
+            flierprops={"marker": "x"},
+            boxprops={"facecolor": "None"},
+            linewidth=0.5)
+        ax.set_title(f'Boxplot of {column}')
+
+        if save_path is not None:
+            plt.savefig(save_path)
+
+        else:
+            plt.show()
+
 
 if __name__ == '__main__':
     data_model = DataModel()
@@ -233,6 +263,7 @@ if __name__ == '__main__':
         filename_2d_corr = f'{column}_2d_correlation.png'
         filename_distribution = f'{column}_distribution.png'
 
-        data_model.plot_2d_correlation(column)#, save_path=os.path.join(path_2d_corr, filename_2d_corr))
-        data_model.plot_distribution(column)# , save_path=os.path.join(path_distribution, filename_distribution))
+        #data_model.plot_2d_correlation(column)#, save_path=os.path.join(path_2d_corr, filename_2d_corr))
+        #data_model.plot_distribution(column)# , save_path=os.path.join(path_distribution, filename_distribution))
+        data_model.plot_boxplots(column)
 
