@@ -12,8 +12,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import scienceplots
 from pandas import DataFrame, Series
+from src.util import match_df, remove_outliers, remove_outliers_iqr
 
-#plt.style.use(['ieee'])
+plt.style.use(['science', 'ieee'])
 
 # GLOBAL VARIABLES
 project_path: str = os.path.abspath(__file__)
@@ -27,6 +28,10 @@ _output_path: str = os.path.join(data_path, r'pre_processed\energy_output.csv')
 path_corr_matrix: str = os.path.join(data_path, 'results', 'correlation_matrices')
 path_2d_corr: str = os.path.join(data_path, 'results', 'correlations')
 path_distribution: str = os.path.join(data_path, 'results', 'distributions')
+path_boxplots: str = os.path.join(data_path, 'results', 'boxplots')
+
+cnn_data_path: str = os.path.join(data_path, 'pre_processed', 'cnn_data')
+
 
 
 @dataclass
@@ -71,6 +76,11 @@ class DataModel:
         use_output_column: list[str] = ['e_site_energy_use_norm_kbtu']
         self.output_data = self.output_data[use_output_column]
 
+        self.input_data = remove_outliers_iqr(self.input_data, q1=0.12, q2=0.88)
+        self.output_data = remove_outliers_iqr(self.output_data, q1=0.12, q2=0.88)
+
+        self.input_data, self.output_data = match_df(self.input_data, self.output_data)
+
         # Check if all columns are of type numeric
         for column in self.input_data.columns:
             if self.input_data[column].dtype != 'float64':
@@ -87,38 +97,47 @@ class DataModel:
         self.input_data = self.input_data[~(self.input_data.isnull().any(axis=1))]
         self.output_data = self.output_data.loc[~(self.output_data.isnull().any(axis=1))]
 
-        scaler = StandardScaler()
-        z_scores_input = scaler.fit_transform(self.input_data)
-        z_scores_output = scaler.fit_transform(self.output_data)
+        self.input_data, self.output_data = match_df(self.input_data, self.output_data)
 
-        self.input_data = self.input_data[(z_scores_input < z_value).all(axis=1)]
-        self.output_data = self.output_data[(z_scores_output < z_value).all(axis=1)]
+        self.input_data = remove_outliers(self.input_data, z_value, axis=1)
+        self.output_data = remove_outliers(self.output_data, z_value, axis=0)  # axis=0 for output data
 
-        drop_idx = list(set(self.input_data.index) ^ set(self.output_data.index))
+        self.input_data, self.output_data = match_df(self.input_data, self.output_data)
 
-        self.input_data = self.input_data.loc[~self.input_data.index.isin(drop_idx)]
-        self.output_data = self.output_data.loc[~self.output_data.index.isin(drop_idx)]
-        print('New shape of input data:', self.input_data.shape)
-
-        assert (self.input_data.shape[0] == self.output_data.shape[0])
-
-        # Test train split
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.input_data,
-                                                                                self.output_data, test_size=test_size)
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.input_data, self.output_data,
+                                                                                test_size=test_size)
 
         # Scale the data
-        scaler = MinMaxScaler()
-        z_scores_input = scaler.fit_transform(self.X_train)
-        z_scores_output = scaler.fit_transform(self.y_train)
+        scaler = StandardScaler()
+        self.X_train = pd.DataFrame(scaler.fit_transform(self.X_train), columns=self.X_train.columns)
+        self.X_test = pd.DataFrame(scaler.transform(self.X_test), columns=self.X_test.columns)
 
-        self.input_data_scaled = pd.DataFrame(z_scores_input, columns=self.input_data.columns)
-        self.output_data_scaled = pd.DataFrame(z_scores_output, columns=self.output_data.columns)
+        self.y_train = pd.DataFrame(scaler.fit_transform(self.y_train), columns=self.y_train.columns)
+        self.y_test = pd.DataFrame(scaler.transform(self.y_test), columns=self.y_test.columns)
 
-        self.X_train = scaler.fit_transform(self.X_train)
-        self.X_test = scaler.transform(self.X_test)
+        self.input_data_scaled = pd.concat([self.X_train, self.X_test])
+        self.output_data_scaled = pd.concat([self.y_train, self.y_test])
 
-        self.y_train = scaler.fit_transform(self.y_train)
-        self.y_test = scaler.transform(self.y_test)
+
+    def export_data(self, path_out: str):
+        """
+        Function to export the data
+
+        :param path_out: str: Path to the output file
+
+        :return: None
+        """
+
+        # Define file names
+        x_train_path = os.path.join(path_out, 'X_train.csv')
+        x_test_path = os.path.join(path_out, 'X_test.csv')
+        y_train_path = os.path.join(path_out, 'y_train.csv')
+        y_test_path = os.path.join(path_out, 'y_test.csv')
+
+        self.X_train.to_csv(x_train_path, index=True)
+        self.X_test.to_csv(x_test_path, index=True)
+        self.y_train.to_csv(y_train_path, index=True)
+        self.y_test.to_csv(y_test_path, index=True)
 
     def compute_correlation(self) -> None:
         """
@@ -145,8 +164,8 @@ class DataModel:
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')  # Rotate x-axis labels
         if save_path is not None:
             plt.savefig(save_path)
-        else:
-            plt.show()
+
+        plt.show()
 
     def plot_2d_correlation(self, x: str, save_path: str | None = None) -> None:
         """
@@ -180,7 +199,7 @@ class DataModel:
         line_values = intercept + slope * x_values
 
         fig, ax = plt.subplots(1, 1, figsize=(12, 10))
-        ax.scatter(x_values, y_values)
+        ax.scatter(x_values, y_values, marker='^', alpha=0.8, s=1.5)
         ax.plot(x_values, line_values, color='red')
         ax.set_xlabel(x)
         ax.set_ylabel(self.output_data_scaled.columns[0])
@@ -188,8 +207,8 @@ class DataModel:
 
         if save_path is not None:
             plt.savefig(save_path)
-        else:
-            plt.show()
+
+        plt.show()
 
     def plot_distribution(self, column: str, save_path: str | None = None) -> None:
         """
@@ -214,8 +233,7 @@ class DataModel:
         if save_path is not None:
             plt.savefig(save_path)
 
-        else:
-            plt.show()
+        plt.show()
 
     def plot_boxplots(self, column: str, save_path: str | None = None) -> None:
         """
@@ -244,26 +262,28 @@ class DataModel:
         if save_path is not None:
             plt.savefig(save_path)
 
-        else:
-            plt.show()
+        plt.show()
 
 
 if __name__ == '__main__':
     data_model = DataModel()
-    data_model.pre_process_data(test_size=0.2, z_value=1.7)
+    data_model.pre_process_data(test_size=0.2, z_value=3.)
 
     data_model.compute_correlation()
-    data_model.plot_correlation_matrix()#save_path=os.path.join(path_corr_matrix, 'correlation_matrix.png'))
+    data_model.plot_correlation_matrix(save_path=os.path.join(path_corr_matrix, 'correlation_matrix.png'))
 
-    print(data_model.input_data_scaled.head())
-    print(data_model.output_data_scaled.head())
+    print(data_model.input_data_scaled)
+    print(data_model.output_data_scaled)
 
     for column in data_model.input_data.columns:
 
         filename_2d_corr = f'{column}_2d_correlation.png'
         filename_distribution = f'{column}_distribution.png'
+        filename_boxplot = f'{column}_boxplot.png'
 
-        #data_model.plot_2d_correlation(column)#, save_path=os.path.join(path_2d_corr, filename_2d_corr))
-        #data_model.plot_distribution(column)# , save_path=os.path.join(path_distribution, filename_distribution))
-        data_model.plot_boxplots(column)
+        data_model.plot_2d_correlation(column, save_path=os.path.join(path_2d_corr, filename_2d_corr))
+        data_model.plot_distribution(column, save_path=os.path.join(path_distribution, filename_distribution))
+        data_model.plot_boxplots(column, save_path=os.path.join(path_boxplots, filename_boxplot))
+
+    data_model.export_data(cnn_data_path)
 
