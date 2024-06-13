@@ -19,7 +19,7 @@ def match_df(df_1: pd.DataFrame, df_2: pd.DataFrame) -> tuple[pd.DataFrame, pd.D
     return df_1, df_2
 
 
-def remove_outliers(df: pd.DataFrame, z: float, axis: int = 1) -> pd.DataFrame:
+def remove_outliers_zscore(df: pd.DataFrame, z: float, axis: int = 1) -> pd.DataFrame:
     """
     Remove outliers from a DataFrame using the z-score method.
 
@@ -36,7 +36,7 @@ def remove_outliers(df: pd.DataFrame, z: float, axis: int = 1) -> pd.DataFrame:
     return df[(z_scores < z).all(axis=1)]
 
 
-def remove_outliers_iqr(df: pd.DataFrame, q1: float = 0.25, q2: float = 0.75) -> pd.DataFrame:
+def remove_outliers_iqr(df: pd.DataFrame, q1: float = 0.25, q2: float = 0.75, axis: int = 1) -> pd.DataFrame:
     """
     Remove outliers from a DataFrame using the IQR method.
 
@@ -58,7 +58,7 @@ def remove_outliers_iqr(df: pd.DataFrame, q1: float = 0.25, q2: float = 0.75) ->
     print(f'Lower Bound:\n{lower_bound}')
     print(f'Upper Bound:\n{upper_bound}')
 
-    filtered_df = df[~((df < lower_bound) | (df > upper_bound)).any(axis=1)]
+    filtered_df = df[~((df < lower_bound) | (df > upper_bound)).any(axis=axis)]
     return filtered_df
 
 
