@@ -12,7 +12,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import scienceplots
 from pandas import DataFrame, Series
-from src.util import match_df, remove_outliers, remove_outliers_iqr
+from src.util import match_df, remove_outliers, remove_outliers_iqr, fit_transform_df
 
 plt.style.use(['science', 'ieee'])
 
@@ -42,6 +42,8 @@ class DataModel:
     X_test: DataFrame | None = None
     y_train: DataFrame | None = None
     y_test: DataFrame | None = None
+    X_val: DataFrame | None = None
+    y_val: DataFrame | None = None
     correlation: DataFrame | None = None
     input_data_scaled: DataFrame | None = None
     output_data_scaled: DataFrame | None = None
@@ -53,7 +55,7 @@ class DataModel:
         self.input_data = pd.read_csv(path_in, index_col='bef_id')
         self.output_data = pd.read_csv(path_out, index_col='energy_id')
 
-    def pre_process_data(self, test_size: float = 0.2, z_value: float = 3.) -> None:
+    def pre_process_data(self, test_size: float = 0.3, z_value: float = 3.) -> None:
         """
         Function to pre-process the input data including:
         - Filtering columns
@@ -104,20 +106,24 @@ class DataModel:
 
         self.input_data, self.output_data = match_df(self.input_data, self.output_data)
 
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.input_data, self.output_data,
-                                                                                test_size=test_size)
+        self.X_train, X_temp, self.y_train, y_temp = train_test_split(self.input_data, self.output_data,
+                                                                      test_size=test_size)
+
+        self.X_val, self.X_test, self.y_val, self.y_test = train_test_split(X_temp, y_temp, test_size=0.5)
 
         # Scale the data
         scaler = StandardScaler()
-        self.X_train = pd.DataFrame(scaler.fit_transform(self.X_train), columns=self.X_train.columns)
+
+        self.X_train = fit_transform_df(self.X_train, scaler)
         self.X_test = pd.DataFrame(scaler.transform(self.X_test), columns=self.X_test.columns)
+        self.X_val = pd.DataFrame(scaler.transform(self.X_val), columns=self.X_val.columns)
 
-        self.y_train = pd.DataFrame(scaler.fit_transform(self.y_train), columns=self.y_train.columns)
+        self.y_train = fit_transform_df(self.y_train, scaler)
         self.y_test = pd.DataFrame(scaler.transform(self.y_test), columns=self.y_test.columns)
+        self.y_val = pd.DataFrame(scaler.transform(self.y_val), columns=self.y_val.columns)
 
-        self.input_data_scaled = pd.concat([self.X_train, self.X_test])
-        self.output_data_scaled = pd.concat([self.y_train, self.y_test])
-
+        self.input_data_scaled = pd.concat([self.X_train, self.X_test, self.X_val])
+        self.output_data_scaled = pd.concat([self.y_train, self.y_test, self.y_val])
 
     def export_data(self, path_out: str):
         """
@@ -133,18 +139,22 @@ class DataModel:
         x_test_path = os.path.join(path_out, 'X_test.csv')
         y_train_path = os.path.join(path_out, 'y_train.csv')
         y_test_path = os.path.join(path_out, 'y_test.csv')
+        x_val_path = os.path.join(path_out, 'X_val.csv')
+        y_val_path = os.path.join(path_out, 'y_val.csv')
 
         self.X_train.to_csv(x_train_path, index=True)
         self.X_test.to_csv(x_test_path, index=True)
         self.y_train.to_csv(y_train_path, index=True)
         self.y_test.to_csv(y_test_path, index=True)
+        self.X_val.to_csv(x_val_path, index=True)
+        self.y_val.to_csv(y_val_path, index=True)
 
     def compute_correlation(self) -> None:
         """
         Function to compute the correlation between the input and output data
 
         :return: None
-        """
+       """
 
         combined_data = pd.concat([self.input_data, self.output_data], axis=1)
         self.correlation = combined_data.corr()

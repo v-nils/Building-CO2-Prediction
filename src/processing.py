@@ -69,7 +69,7 @@ class CNN(nn.Module):
         self.pool1 = nn.MaxPool1d(kernel_size=2, stride=2)
 
     def forward(self, x):
-        x = x.unsqueeze(1)
+        x = x.unsqueeze(1)  # Add channel dimension
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = self.pool1(x)

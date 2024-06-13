@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import stats
+from sklearn.preprocessing import StandardScaler
 
 
 def match_df(df_1: pd.DataFrame, df_2: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -59,3 +60,15 @@ def remove_outliers_iqr(df: pd.DataFrame, q1: float = 0.25, q2: float = 0.75) ->
 
     filtered_df = df[~((df < lower_bound) | (df > upper_bound)).any(axis=1)]
     return filtered_df
+
+
+def fit_transform_df(df: pd.DataFrame, scaler: object = StandardScaler) -> pd.DataFrame:
+    """
+    Fit and transform a DataFrame using a scaler object.
+
+    :param df: (pd.DataFrame) DataFrame to fit and transform
+    :param scaler: (object) Scaler object
+    :return: (pd.DataFrame) Scaled DataFrame
+    """
+
+    return pd.DataFrame(scaler.fit_transform(df), columns=df.columns, index=df.index)
