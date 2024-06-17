@@ -27,6 +27,7 @@ data_path: str = os.path.join(root_path, 'data')
 
 _input_path: str = os.path.join(data_path, r'pre_processed\bef_input.csv')
 _output_path: str = os.path.join(data_path, r'pre_processed\energy_output.csv')
+_data_path: str = os.path.join(data_path, r'pre_processed\in_and_out_filled_vol.csv')
 
 path_corr_matrix: str = os.path.join(data_path, 'results', 'correlation_matrices')
 path_2d_corr: str = os.path.join(data_path, 'results', 'correlations')
@@ -47,14 +48,20 @@ class DataModel:
     X_test: DataFrame | None = None
     y_train: DataFrame | None = None
     y_test: DataFrame | None = None
-    X_val: DataFrame | None = None
-    y_val: DataFrame | None = None
     correlation: DataFrame | None = None
     input_data_scaled: DataFrame | None = None
     output_data_scaled: DataFrame | None = None
+    p_value: DataFrame | None = None
 
     def __post_init__(self):
-        self.load_data(_input_path, _output_path)
+
+        data: pd.DataFrame = pd.read_csv(_data_path, delimiter=',')
+        print(data.head())
+        self.input_data = data.drop(columns=['e_site_energy_use_norm_kbtu', 'e_total_site_energy_use_kbtu'])
+        self.output_data = data[['e_total_site_energy_use_kbtu']]
+        print(self.input_data.head())
+        pass
+        #self.load_data(_input_path, _output_path)
 
     def load_data(self, path_in: str, path_out: str) -> None:
         self.input_data = pd.read_csv(path_in, index_col='bef_id')
@@ -82,9 +89,10 @@ class DataModel:
         """
         ['lot_area', 'building_area', 'commercial_area', 'residential_area', 'num_floors',
          'residential_units', 'total_units', 'lot_front', 'lot_depth', 'building_front',
-         'building_depth', 'year_built', 'year_altered']"""
+         'building_depth', 'year_built', 'year_altered', 'Z_Min', 'Z_Max', 'Z_Mean', 'SArea', 'Volume']"""
 
-        use_columns: list[str] = ['building_area', 'residential_area', 'residential_units', 'total_units', 'year_built', 'year_altered']
+        use_columns: list[str] = ['building_area', 'commercial_area', 'residential_area', 'residential_units', 'total_units', 'year_built',
+                                  'year_altered', 'num_floors', 'Z_Min', 'Z_Max', 'Z_Mean', 'SArea', 'Volume']
 
         init_number_of_rows: int = len(self.input_data)
 
@@ -109,13 +117,28 @@ class DataModel:
         if 'lot_area' in self.input_data.columns and 'building_area' in self.input_data.columns:
             self.input_data.loc[:, 'lot_bldg_ratio'] = self.input_data['building_area'] / self.input_data['lot_area']
 
+        # Floor area ratio
+        if 'building_area' in self.input_data.columns and 'num_floors' in self.input_data.columns:
+            self.input_data.loc[:, 'floor_area_ratio'] = self.input_data['building_area'] / self.input_data['num_floors']
+
+
         # Area per unit
         if 'total_units' in self.input_data.columns and 'building_area' in self.input_data.columns:
             self.input_data.loc[:, 'unit_area'] = self.input_data['building_area'] / self.input_data['total_units']
 
         # Ratio residential to commercial area
-        if 'residential_area' in self.input_data.columns and 'commercial_area' in self.input_data.columns:
-            self.input_data.loc[:, 'res_com_ratio'] = self.input_data['residential_area'] / self.input_data['commercial_area']
+        if 'residential_area' in self.input_data.columns and 'building_area' in self.input_data.columns:
+            self.input_data.loc[:, 'res_ratio'] = self.input_data['residential_area'] / self.input_data[
+                'building_area']
+
+        # Ration commercial area to total area
+        if 'commercial_area' in self.input_data.columns and 'building_area' in self.input_data.columns:
+            self.input_data.loc[:, 'com_ratio'] = self.input_data['commercial_area'] / self.input_data[
+                'building_area']
+
+        # Ratio of residential area to total area
+        if 'SArea' in self.input_data.columns and 'Volume' in self.input_data.columns:
+            self.input_data.loc[:, 'SArea_Volume_ratio'] = self.input_data['SArea'] / self.input_data['Volume']
 
         # ----------------
 
@@ -149,25 +172,21 @@ class DataModel:
 
         self.input_data, self.output_data = match_df(self.input_data, self.output_data)
 
-        self.X_train, X_temp, self.y_train, y_temp = train_test_split(self.input_data, self.output_data,
-                                                                      test_size=test_size)
-
-        self.X_val, self.X_test, self.y_val, self.y_test = train_test_split(X_temp, y_temp, test_size=0.5)
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.input_data, self.output_data,
+                                                                                test_size=test_size)
 
         self.X_train = fit_transform_df(self.X_train, scaler)
         self.X_test = pd.DataFrame(scaler.transform(self.X_test), columns=self.X_test.columns)
-        self.X_val = pd.DataFrame(scaler.transform(self.X_val), columns=self.X_val.columns)
 
         joblib.dump(scaler, os.path.join(scaler_data_path, 'bef_scaler.pkl'))
 
         self.y_train = fit_transform_df(self.y_train, scaler)
         self.y_test = pd.DataFrame(scaler.transform(self.y_test), columns=self.y_test.columns)
-        self.y_val = pd.DataFrame(scaler.transform(self.y_val), columns=self.y_val.columns)
 
         joblib.dump(scaler, os.path.join(scaler_data_path, 'energy_scaler.pkl'))
 
-        self.input_data_scaled = pd.concat([self.X_train, self.X_test, self.X_val])
-        self.output_data_scaled = pd.concat([self.y_train, self.y_test, self.y_val])
+        self.input_data_scaled = pd.concat([self.X_train, self.X_test])
+        self.output_data_scaled = pd.concat([self.y_train, self.y_test])
 
         print('---------------------------------')
         print('-- Data Pre-processing Summary --')
@@ -175,8 +194,7 @@ class DataModel:
         print(f'-- Initial number of rows in the dataset: {init_number_of_rows}')
         print(f'-- Current number of rows in the dataset: {len(self.input_data_scaled)}')
         print('--')
-        print(f'-- {len(self.input_data_scaled)/init_number_of_rows*100:.2f}% of the data remains')
-
+        print(f'-- {len(self.input_data_scaled) / init_number_of_rows * 100:.2f}% of the data remains')
 
     def export_data(self, path_out: str):
         """
@@ -192,15 +210,11 @@ class DataModel:
         x_test_path = os.path.join(path_out, 'X_test.csv')
         y_train_path = os.path.join(path_out, 'y_train.csv')
         y_test_path = os.path.join(path_out, 'y_test.csv')
-        x_val_path = os.path.join(path_out, 'X_val.csv')
-        y_val_path = os.path.join(path_out, 'y_val.csv')
 
         self.X_train.to_csv(x_train_path, index=True)
         self.X_test.to_csv(x_test_path, index=True)
         self.y_train.to_csv(y_train_path, index=True)
         self.y_test.to_csv(y_test_path, index=True)
-        self.X_val.to_csv(x_val_path, index=True)
-        self.y_val.to_csv(y_val_path, index=True)
 
     def compute_correlation(self) -> None:
         """
@@ -244,7 +258,8 @@ class DataModel:
 
         for i in range(self.correlation.shape[0]):
             for j in range(self.correlation.shape[1]):
-                suffix: str = ' **' if self.p_values.iloc[i, j] <= 0.01 else ' *' if self.p_values.iloc[i, j] <= 0.05 else ''
+                suffix: str = ' **' if self.p_values.iloc[i, j] <= 0.01 else ' *' if self.p_values.iloc[
+                                                                                         i, j] <= 0.05 else ''
                 color: str = 'black' if np.abs(self.correlation.iloc[i, j]) > 0.7 else 'white'
                 text = ax.text(j, i, str(np.around(self.correlation.iloc[i, j], decimals=2)) + suffix,
                                ha="center", va="center", color=color, fontsize=14)
@@ -253,7 +268,7 @@ class DataModel:
             print("Saving correlation matrix to: ", save_path)
             plt.savefig(save_path)
 
-        if show_plot:
+        if show_plot is True:
             plt.show()
 
     def plot_2d_correlation(self, x: str, save_path: str | None = None, show_plot: bool = False) -> None:
@@ -296,13 +311,17 @@ class DataModel:
         ax.set_xlabel(x)
         ax.set_ylabel(self.output_data_scaled.columns[0])
         ax.set_title(
-            f'Linear fit between {x} and {self.output_data_scaled.columns[0]}. P-value: {p_value:.4f} {significance}')
+            f'Linear fit between {x} and {self.output_data_scaled.columns[0]}. P-value: {p_value:.4f} {significance}. '
+            f'R**2: {r_value ** 2:.4f}')
 
         if save_path is not None:
             plt.savefig(save_path)
 
-        if show_plot:
+        if show_plot is True:
             plt.show()
+
+        # close the plot
+        plt.close()
 
     def plot_distribution(self, column: str, save_path: str | None = None, show_plot: bool = False) -> None:
         """
@@ -329,8 +348,10 @@ class DataModel:
         if save_path is not None:
             plt.savefig(save_path)
 
-        if show_plot:
+        if show_plot is True:
             plt.show()
+
+        plt.close()
 
     def plot_boxplots(self,
                       column: str,
@@ -367,14 +388,17 @@ class DataModel:
         if save_path is not None:
             plt.savefig(save_path)
 
-        if show_plot:
+        if show_plot is True:
             plt.show()
 
-    def plot_output_distribution(self, save_path: str | None = None) -> None:
+        plt.close()
+
+    def plot_output_distribution(self, save_path: str | None = None, show_plot: bool = False) -> None:
         """
         Function to plot the distribution of the output data
 
         :param save_path: (str) Path to save the plot
+        :param show_plot: (bool) Show the plot
 
         :return: None
         """
@@ -387,7 +411,11 @@ class DataModel:
         if save_path is not None:
             f_name: str = os.path.join(save_path, 'output_distribution.png')
             plt.savefig(f_name)
-        plt.show()
+
+        if show_plot is True:
+            plt.show()
+
+        plt.close()
 
 
 if __name__ == '__main__':
@@ -395,7 +423,8 @@ if __name__ == '__main__':
     data_model.pre_process_data(scaler=MinMaxScaler(), test_size=0.2, z_value=3., outlier_filter='iqr')
 
     data_model.compute_correlation()
-    data_model.plot_correlation_matrix(save_path=os.path.join(path_corr_matrix, 'correlation_matrix.png'), show_plot=True)
+    data_model.plot_correlation_matrix(save_path=os.path.join(path_corr_matrix, 'correlation_matrix.png'),
+                                       show_plot=True)
 
     print(data_model.input_data_scaled)
     print(data_model.output_data_scaled)
@@ -405,9 +434,14 @@ if __name__ == '__main__':
         filename_distribution = f'{column}_distribution.png'
         filename_boxplot = f'{column}_boxplot.png'
 
-        data_model.plot_2d_correlation(column, save_path=os.path.join(path_2d_corr, filename_2d_corr))
-        data_model.plot_distribution(column, save_path=os.path.join(path_distribution, filename_distribution))
-        data_model.plot_boxplots(column, save_path=os.path.join(path_boxplots, filename_boxplot), showfliers=False)
+        data_model.plot_2d_correlation(column, save_path=os.path.join(path_2d_corr, filename_2d_corr),
+                                       show_plot=show_plots)
+
+        data_model.plot_distribution(column, save_path=os.path.join(path_distribution, filename_distribution),
+                                     show_plot=show_plots)
+
+        data_model.plot_boxplots(column, save_path=os.path.join(path_boxplots, filename_boxplot), show_plot=show_plots,
+                                 showfliers=False)
 
     data_model.export_data(cnn_data_path)
     data_model.plot_output_distribution(save_path=path_distribution)
