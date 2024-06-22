@@ -19,7 +19,7 @@ import scienceplots
 from pandas import DataFrame, Series
 from sympy.core.numbers import NegativeOne
 
-from src.util import match_df, remove_outliers_zscore, remove_outliers_iqr, fit_transform_df
+from src.util import match_df, remove_outliers_zscore, remove_outliers_iqr, fit_transform_df, transform_df
 
 plt.style.use(['science', 'ieee'])
 
@@ -31,39 +31,58 @@ use_output_column: list[str] = ['e_total_site_energy_use_kbtu']
 output_label = 'Total energy consumption' if use_output_column == 'e_total_site_energy_use_kbtu' else 'Normalized energy consumption'
 
 bef_dict: dict[str, str] = {
-    "lot_area": "Lot area",
-    "building_area": "Building area",
-    "commercial_area": "Commercial area",
-    "residential_area": "Residential area",
-    "num_floors": "Number of floors",
-    "residential_units": "Residential units",
-    "total_units": "Total units",
-    "lot_front": "Lot frontage",
-    "lot_depth": "Lot depth",
-    "building_front": "Building frontage",
-    "building_depth": "Building depth",
-    "year_built": "Year built",
-    "year_altered": "Year altered",
-    "Z_Min": "Min elevation",
-    "Z_Max": "Max elevation",
-    "Z_Mean": "Mean elevation",
-    "SArea": "Surface area",
-    "Volume": "Volume",
-    "floor_area_ratio": "Floor area ratio",
-    "lot_bldg_ratio": "Lot building ratio",
-    "unit_area": "Unit area",
-    "res_ratio": "Residential ratio",
-    "com_ratio": "Commercial ratio",
-    "sarea_volume_ratio": "Surface area to volume ratio",
-    "e_site_energy_use_norm_kbtu": "Normalized energy consumption",
-    "e_total_site_energy_use_kbtu": "Total energy consumption"
+    "bbl": "BBL",
+    "lotarea": "Lot area",
+    "bldgarea": "Building area",
+    "comarea": "Commercial area",
+    "resarea": "Residential area",
+    "officearea": "Office area",
+    "retailarea": "Retail area",
+    "garagearea": "Garage area",
+    "strgearea": "Storage area",
+    "factryarea": "Factory area",
+    "otherarea": "Other area",
+    "numbldgs": "Number of buildings",
+    "numfloors": "Number of floors",
+    "unitstotal": "Total units",
+    "lotfront": "Lot frontage",
+    "lotdepth": "Lot depth",
+    "bldgfront": "Building frontage",
+    "bldgdepth": "Building depth",
+    "lotbldgratio": "Lot/building ratio",
+    "floorarearatio": "Floor area ratio",
+    "unitarea": "Unit area",
+    "resratio": "Residential ratio",
+    "comratio": "Commercial ratio",
+    "sareavolumeratio": "Surface/volume ratio",
+    "assessland": "Land assessment",
+    "proxcode": "Proximity code",
+    "irrlotcode": "Irregular lot code",
+    "yearbuilt": "Year built",
+    "yearaltered": "Year altered",
+    "builtfar": "Built FAR",
+    "residfar": "Residential FAR",
+    "commfar": "Commercial FAR",
+    "facilfar": "Facility FAR",
+    "shape_area": "Shape area",
+    "z_min": "Min elevation",
+    "z_max": "Max elevation",
+    "z_mean": "Mean elevation",
+    "sarea": "Surface area",
+    "volume": "Volume",
+    "weather_normalized_site_energy_use_kbtu": "Weather normalized site energy use (kBTU)",
+    "weather_normalized_site_eui_kbtu_ft": "Weather normalized site EUI (kBTU/ft$^2$)",
+    "total_ghg_emissions_metric_tons_co2e": "Total GHG emissions (metric tons CO$_2$e)",
+    "total_ghg_emissions_intensity_kgco2e_ft": "Total GHG emissions intensity (kgCO$_2$e/ft$^2$)"
 }
+
+
 
 data_path: str = os.path.join(root_path, 'data')
 
 _input_path: str = os.path.join(data_path, r'pre_processed\bef_input.csv')
 _output_path: str = os.path.join(data_path, r'pre_processed\energy_output.csv')
-_data_path: str = os.path.join(data_path, r'pre_processed\bef_energy_data.csv')
+_data_path: str = os.path.join(data_path, r'pre_processed\full_ds.csv')
 
 path_corr_matrix: str = os.path.join(data_path, 'results', 'correlation_matrices')
 path_2d_corr: str = os.path.join(data_path, 'results', 'correlations')
@@ -71,7 +90,7 @@ path_distribution: str = os.path.join(data_path, 'results', 'distributions')
 path_r2: str = os.path.join(data_path, 'results', 'r2_values')
 path_boxplots: str = os.path.join(data_path, 'results', 'boxplots')
 
-cnn_data_path: str = os.path.join(data_path, 'pre_processed', 'cnn_data')
+cnn_data_path: str = os.path.join(data_path, 'pre_processed', 'nn_data')
 scaler_data_path: str = os.path.join(data_path, 'scaler')
 
 show_plots: bool = False
@@ -80,31 +99,24 @@ show_plots: bool = False
 @dataclass
 class DataModel:
     input_data: DataFrame | None = None
+    processing_data: DataFrame | None = None
     output_data: DataFrame | None = None
-    X_train: DataFrame | None = None
-    X_test: DataFrame | None = None
-    y_train: DataFrame | None = None
-    y_test: DataFrame | None = None
+    train: DataFrame | None = None
+    test: DataFrame | None = None
     correlation: DataFrame | None = None
-    input_data_scaled: DataFrame | None = None
-    output_data_scaled: DataFrame | None = None
+    data_scaled: DataFrame | None = None
     p_value: DataFrame | None = None
-    r_2: dict[str, float | None ] | None = None
+    r_2: dict[str, float | None] | None = None
 
     def __len__(self) -> int:
         return len(self.input_data)
 
     def __post_init__(self):
 
-        data: pd.DataFrame = pd.read_csv(_data_path, delimiter=',')
-
-        nan_per_column = data.isna().sum()
-        self.input_data = data.drop(columns=['e_site_energy_use_norm_kbtu', 'e_total_site_energy_use_kbtu'])
-        self.output_data = data[['e_total_site_energy_use_kbtu']]
-        print(self.input_data.head())
+        self.df: pd.DataFrame = pd.read_csv(_data_path, delimiter=',', index_col=0)
 
     def load_data(self, path_in: str, path_out: str) -> None:
-        self.input_data = pd.read_csv(path_in, index_col='bef_id')
+        self.input_data = pd.read_csv(path_in, index_col='bbl')
         self.output_data = pd.read_csv(path_out, index_col='energy_id')
 
     def pre_process_data(self,
@@ -112,7 +124,8 @@ class DataModel:
                          test_size: float = 0.3,
                          z_value: float = 3.,
                          outlier_filter: str = 'zscore',
-                         columns: list[str] | str = 'all') -> None:
+                         input_columns: list[str] | str = 'all',
+                         output_columns: str = 'weather_normalized_site_energy_use_kbtu') -> None:
         """
         Function to pre-process the input data including:
         - Filtering columns
@@ -125,94 +138,58 @@ class DataModel:
         :param scaler: (object) Scaler object: MinMaxScaler or StandardScaler
         :param z_value: (float) Z-score threshold for outlier removal
         :param outlier_filter: (str) Method to remove outliers: 'zscore' or 'iqr'
-        :param columns: (list) List of columns to keep
+        :param input_columns: (list) List of columns to keep
+        :param output_columns: (str) Name of the output column
         :return: None
         """
-        """
-        ['lot_area', 'building_area', 'commercial_area', 'residential_area', 'num_floors',
-         'residential_units', 'total_units', 'lot_front', 'lot_depth', 'building_front',
-         'building_depth', 'year_built', 'year_altered', 'Z_Min', 'Z_Max', 'Z_Mean', 'SArea', 'Volume', 'floor_area_ratio', 
-         'lot_bldg_ratio', 'unit_area', 'res_ratio', 'com_ratio', 'sarea_volume_ratio', 'e_site_energy_use_norm_kbtu', 'e_total_site_energy_use_kbtu']"""
 
-        """
-        'building_area', 'commercial_area', 'residential_area', 'residential_units',
-                                  'total_units', 'year_built',
-                                  'year_altered', 'num_floors', 'Z_Min', 'Z_Max', 'Z_Mean', 'SArea', 'Volume'
-        """
+        init_number_of_rows: int = len(self.df)
 
-        init_number_of_rows: int = len(self.input_data)
-
-        # Filter columns
-        if columns != 'all':
-            self.input_data = self.input_data[columns]
+        if input_columns == 'all':
+            self.processing_data = pd.concat([self.df.iloc[:, :-4], self.df[[output_columns]]], axis=1)
         else:
-            self.input_data = self.input_data[
-                ['lot_area', 'building_area', 'commercial_area',
-                 'residential_area', 'num_floors', 'residential_units',
-                 'total_units', 'lot_front', 'lot_depth',
-                 'building_front', 'building_depth', 'year_built',
-                 'year_altered', 'Z_Min', 'Z_Max',
-                 'Z_Mean', 'SArea', 'Volume',
-                 'floor_area_ratio', 'lot_bldg_ratio', 'unit_area',
-                 'res_ratio', 'com_ratio', 'sarea_volume_ratio']]
-
-        # 'e_site_energy_use_norm_kbtu', 'e_total_site_energy_use_kbtu'
-        self.output_data = self.output_data[use_output_column]
-
-        self.input_data, self.output_data = match_df(self.input_data, self.output_data)
+            self.processing_data = pd.concat([self.df[input_columns], self.df[[output_columns]]], axis=1)
 
         # Check if all columns are of type numeric
-        for column in self.input_data.columns:
-            if self.input_data[column].dtype != 'float64':
-                print(f'Column {column} is of type {self.input_data[column].dtype}')
+        for column in self.processing_data.columns:
+            if self.processing_data[column].dtype != 'float64' and self.processing_data[column].dtype != 'int64':
+                print(f'Column {column} is of type {self.processing_data[column].dtype}')
 
-        self.input_data = self.input_data.replace([float('inf'), float('-inf')], pd.NA)
-        self.output_data = self.output_data.replace([float('inf'), float('-inf')], pd.NA)
+        self.processing_data = self.processing_data.replace([float('inf'), float('-inf')], pd.NA)
 
-        self.input_data = self.input_data[~(self.input_data.isnull().any(axis=1))]
-        self.output_data = self.output_data.loc[~(self.output_data.isnull().any(axis=1))]
-
-        self.input_data, self.output_data = match_df(self.input_data, self.output_data)
+        self.processing_data = self.processing_data[~(self.df.isnull().any(axis=1))]
 
         if outlier_filter == 'iqr':
-            self.input_data = remove_outliers_iqr(self.input_data, q1=0.3, q2=0.7, axis=1)
-            self.output_data = remove_outliers_iqr(self.output_data, q1=0.25, q2=0.75, axis=1)
+            self.processing_data = remove_outliers_iqr(self.processing_data, q1=0.25, q2=0.75, axis=1)
         elif outlier_filter == 'zscore':
-            self.input_data = remove_outliers_zscore(self.input_data, z_value, axis=1)
-            self.output_data = remove_outliers_zscore(self.output_data, z_value, axis=0)  # axis=0 for output data
+            self.processing_data = remove_outliers_zscore(self.processing_data, z_value, axis=1)
         else:
             raise ValueError(f'Invalid outlier filter: {outlier_filter}')
 
-        print(f'Number of rows after outlier removal (input): {len(self.input_data)}')
-        print(f'Number of rows after outlier removal (output): {len(self.output_data)}')
+        print(f'Number of rows after outlier removal: {len(self.processing_data)}')
 
-        self.input_data, self.output_data = match_df(self.input_data, self.output_data)
+        self.train, self.test = train_test_split(self.processing_data, test_size=test_size)
 
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.input_data, self.output_data,
-                                                                                test_size=test_size)
+        # DropNaN
+        self.train = self.train.dropna()
+        self.test = self.test.dropna()
 
-        self.X_train = fit_transform_df(self.X_train, scaler)
-        self.X_test = pd.DataFrame(scaler.transform(self.X_test), columns=self.X_test.columns, index=self.X_test.index)
+        self.train = fit_transform_df(self.train, scaler)
+        self.test = transform_df(self.test, scaler)
 
-        joblib.dump(scaler, os.path.join(scaler_data_path, 'bef_scaler.pkl'))
+        joblib.dump(scaler, os.path.join(scaler_data_path, 'scaler.pkl'))
 
-        self.y_train = fit_transform_df(self.y_train, scaler)
-        self.y_test = pd.DataFrame(scaler.transform(self.y_test), columns=self.y_test.columns, index=self.y_test.index)
-
-        joblib.dump(scaler, os.path.join(scaler_data_path, 'energy_scaler.pkl'))
-
-        self.input_data_scaled = pd.concat([self.X_train, self.X_test])
-        self.output_data_scaled = pd.concat([self.y_train, self.y_test])
+        self.data_scaled = pd.concat([self.train, self.test], axis=0)
 
         print('---------------------------------')
         print('-- Data Pre-processing Summary --')
         print('--')
         print(f'-- Initial number of rows in the dataset: {init_number_of_rows}')
-        print(f'-- Current number of rows in the dataset: {len(self.input_data_scaled)}')
+        print(f'-- Current number of rows in the dataset: {len(self.data_scaled)}')
         print('--')
-        print(f'-- Number of rows in the training set: {len(self.X_train)}')
-        print(f'-- Number of rows in the test set: {len(self.X_test)}')
-        print(f'-- {len(self.input_data_scaled) / init_number_of_rows * 100:.2f}% of the data remains')
+        print(f'-- Number of rows in the training set: {len(self.train)}')
+        print(f'-- Number of rows in the test set: {len(self.test)}')
+        print(f'-- {len(self.data_scaled) / init_number_of_rows * 100:.2f}% of the data remains')
 
     def export_data(self, path_out: str):
         """
@@ -224,19 +201,11 @@ class DataModel:
         """
 
         # Define file names
-        x_train_path = os.path.join(path_out, 'X_train.csv')
-        x_test_path = os.path.join(path_out, 'X_test.csv')
-        y_train_path = os.path.join(path_out, 'y_train.csv')
-        y_test_path = os.path.join(path_out, 'y_test.csv')
-        x_all_path = os.path.join(path_out, 'X_all.csv')
-        y_all_path = os.path.join(path_out, 'y_all.csv')
+        train_path = os.path.join(path_out, 'train.csv')
+        test_path = os.path.join(path_out, 'test.csv')
 
-        self.X_train.to_csv(x_train_path, index=True)
-        self.X_test.to_csv(x_test_path, index=True)
-        self.y_train.to_csv(y_train_path, index=True)
-        self.y_test.to_csv(y_test_path, index=True)
-        self.input_data_scaled.to_csv(x_all_path, index=True)
-        self.output_data_scaled.to_csv(y_all_path, index=True)
+        self.train.to_csv(train_path, index=True)
+        self.test.to_csv(test_path, index=True)
 
     def compute_correlation(self) -> None:
         """
@@ -245,10 +214,14 @@ class DataModel:
         :return: None
        """
 
-        combined_data = pd.concat([self.input_data, self.output_data], axis=1)
-        self.correlation = combined_data.corr()
-        self.p_values = self.correlation.apply(
-            lambda x: [stats.pearsonr(x, self.correlation[col])[1] for col in self.correlation.columns], axis=0)
+        self.correlation = self.data_scaled.corr()
+
+        na_cols = self.correlation.columns[self.correlation.isna().all()].tolist()
+        self.data_scaled.drop(columns=na_cols, inplace=True)
+        self.train.drop(columns=na_cols, inplace=True)
+        self.test.drop(columns=na_cols, inplace=True)
+        self.correlation = self.data_scaled.corr()
+        self.p_value = self.data_scaled.corr(method=lambda x, y: linregress(x, y).pvalue)
 
     def plot_correlation_matrix(self, save_path: str | None = None, show_plot: bool = False):
         """
@@ -282,10 +255,15 @@ class DataModel:
 
         for i in range(self.correlation.shape[0]):
             for j in range(self.correlation.shape[1]):
-                suffix: str = ' **' if self.p_values.iloc[i, j] <= 0.01 else ' *' if self.p_values.iloc[
-                                                                                         i, j] <= 0.05 else ''
+
                 color: str = 'black' if np.abs(self.correlation.iloc[i, j]) > 0.7 else 'white'
-                text = ax.text(j, i, str(np.around(self.correlation.iloc[i, j], decimals=2)) + suffix,
+                if self.p_value.iloc[i, j] < 0.01:
+                    suffix = '**'
+                elif self.p_value.iloc[i, j] < 0.05:
+                    suffix = '*'
+                else:
+                    suffix = ''
+                text = ax.text(j, i, str(np.around(self.correlation.iloc[i, j], decimals=2)),
                                ha="center", va="center", color=color, fontsize=14)
 
         if save_path is not None:
@@ -310,14 +288,14 @@ class DataModel:
         if self.r_2 is None:
             self.r_2 = {}
 
-        if self.input_data_scaled is None:
+        if self.data_scaled is None:
             raise ValueError('Data not loaded')
 
-        if x not in self.input_data_scaled.columns:
+        if x not in self.data_scaled.columns:
             raise ValueError(f'{x} not in input data')
 
-        x_values = self.input_data_scaled.loc[:, x].to_numpy().reshape(-1, 1)
-        y_values = self.output_data_scaled.iloc[:, 0].to_numpy().reshape(-1, 1)
+        x_values = self.data_scaled.loc[:, x].to_numpy().reshape(-1, 1)
+        y_values = self.data_scaled.iloc[:, -1].to_numpy().reshape(-1, 1)
 
         print("-----------------------------")
         print("-- START Lasso regression --")
@@ -371,16 +349,16 @@ class DataModel:
         :return: None
         """
 
-        if self.input_data_scaled is None:
+        if self.data_scaled is None:
             raise ValueError('Data not loaded')
 
-        if column not in self.input_data_scaled.columns:
+        if column not in self.data_scaled.columns:
             raise ValueError(f'{column} not in input data')
 
         fig, ax1 = plt.subplots(1, 1, figsize=(12, 10))
 
         # Plot the histogram
-        sns.histplot(self.input_data_scaled[column], ax=ax1, kde=False, element="bars", edgecolor=None, color='gray',
+        sns.histplot(self.data_scaled[column], ax=ax1, kde=False, element="bars", edgecolor=None, color='gray',
                      label='Bins')
         ax1.set_xlabel(bef_dict[column], fontsize=20)
         ax1.set_ylabel(f'Frequency', fontsize=20)
@@ -388,7 +366,7 @@ class DataModel:
 
         # Create a secondary y-axis for the KDE plot
         ax2 = ax1.twinx()
-        sns.kdeplot(self.input_data_scaled[column], color='black', linestyle='-.', linewidth=1.5, ax=ax2,
+        sns.kdeplot(self.data_scaled[column], color='black', linestyle='-.', linewidth=1.5, ax=ax2,
                     label='Kernel Density Estimate')
         ax2.set_ylabel('Density', fontsize=20)
         ax2.tick_params(axis='y', colors='black', labelsize=12)
@@ -417,16 +395,16 @@ class DataModel:
         :return: None
         """
 
-        if self.input_data_scaled is None:
+        if self.data_scaled is None:
             raise ValueError('Data not loaded')
 
-        if column not in self.input_data_scaled.columns:
+        if column not in self.data_scaled.columns:
             raise ValueError(f'{column} not in input data')
 
         fig, ax = plt.subplots(1, 1, figsize=(4, 10))
 
         b = sns.boxplot(
-            y=self.input_data_scaled[column],
+            y=self.data_scaled[column],
             ax=ax,
             flierprops={"marker": "x"},
             boxprops={"facecolor": "None"},
@@ -457,7 +435,7 @@ class DataModel:
         fig, ax1 = plt.subplots(1, 1, figsize=(12, 10))
 
         # Plot the histogram
-        sns.histplot(self.output_data_scaled, ax=ax1, kde=False, element="bars", edgecolor=None, color='gray',
+        sns.histplot(self.data_scaled.iloc[:, -1], ax=ax1, kde=False, element="bars", edgecolor=None, color='gray',
                      label='Bins')
         ax1.set_xlabel(output_label, fontsize=20)
         ax1.set_ylabel('Frequency', fontsize=20)
@@ -465,7 +443,7 @@ class DataModel:
 
         # Create a secondary y-axis for the KDE plot
         ax2 = ax1.twinx()
-        sns.kdeplot(self.output_data_scaled, color='red', linewidth=1.5, linestyle='-.', ax=ax2,
+        sns.kdeplot(self.data_scaled.iloc[:, -1], color='red', linewidth=1.5, linestyle='-.', ax=ax2,
                     label='Kernel Density Estimate')
         ax2.set_ylabel('Density', fontsize=20)
         ax2.yaxis.label.set_color('black')
@@ -488,13 +466,19 @@ class DataModel:
         :return:
         """
 
+        if self.r_2 is None:
+            for column in self.data_scaled.iloc[:, :-1].columns:
+                self.compute_2d_correlation(column)
+
         # Get columns where r_2 > 0.3
         columns = [key for key, value in self.r_2.items() if value > threshold]
 
-        self.__post_init__()
-        self.pre_process_data(**model_params, columns=columns)
+        print(f'Columns with R^2 > {threshold}: {columns}')
 
-    def plot_r2(self, save_path: str | None = None, show_plot: bool = False) -> None:
+        self.__post_init__()
+        self.pre_process_data(**model_params, input_columns=columns)
+
+    def plot_r2(self, save_path: str | None = None, show_plot: bool = False, thresh: float = 0.25) -> None:
         """
         Function to plot the R^2 values
 
@@ -520,7 +504,7 @@ class DataModel:
         ax.set_title('R$^2$ values for the features', fontsize=24)
 
         ax.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=20)
-        ax.axhline(y=0.3, color='red', linestyle='--', linewidth=1.5, label='Threshold: 0.3')
+        ax.axhline(y=thresh, color='red', linestyle='--', linewidth=1.5, label=f'Threshold: {thresh}')
 
         ax.tick_params(axis='both', colors='black', labelsize=12)
 
@@ -529,10 +513,10 @@ class DataModel:
             height = bar.get_height()
             if height < 0.05:  # Adjust this threshold as needed
                 ax.text(bar.get_x() + bar.get_width() / 2, height, f'{value:.2f}', ha='center', va='bottom',
-                        fontsize=12)
+                        fontsize=10)
             else:
                 ax.text(bar.get_x() + bar.get_width() / 2, height / 2, f'{value:.2f}', ha='center', va='center',
-                        fontsize=12, color='white')
+                        fontsize=10, color='white')
 
         if save_path is not None:
             plt.savefig(save_path)
@@ -542,9 +526,48 @@ class DataModel:
 
         plt.close()
 
+    def plot_data_exploration(self, data_dir: str, threshold: float = 0.25):
+        """
+        Function to plot the data exploration
+
+        :return: None
+        """
+
+        # Define the path to save the plots
+        path_corr_matrix = os.path.join(data_dir, 'correlation_matrices')
+        path_2d_corr = os.path.join(data_dir, 'correlations')
+        path_distribution = os.path.join(data_dir, 'distributions')
+        path_r2 = os.path.join(data_dir, 'r2_values')
+        path_boxplots = os.path.join(data_dir, 'boxplots')
+
+        if self.correlation is None:
+            self.compute_correlation()
+
+        self.plot_correlation_matrix(save_path=os.path.join(path_corr_matrix, 'correlation_matrix.png'),
+                                           show_plot=True)
+
+        for column in self.data_scaled.iloc[:, :-1].columns:
+            filename_2d_corr = f'{column}_2d_correlation.png'
+            filename_distribution = f'{column}_distribution.png'
+            filename_boxplot = f'{column}_boxplot.png'
+
+            self.compute_2d_correlation(column, save_path=os.path.join(path_2d_corr, filename_2d_corr),
+                                              show_plot=show_plots)
+
+            self.plot_distribution(column, save_path=os.path.join(path_distribution, filename_distribution),
+                                         show_plot=show_plots)
+
+            self.plot_boxplots(column, save_path=os.path.join(path_boxplots, filename_boxplot), show_plot=show_plots,
+                                     showfliers=False)
+
+        self.plot_output_distribution(save_path=path_distribution, show_plot=show_plots)
+        self.plot_r2(save_path=os.path.join(path_r2, 'r2.png'), show_plot=show_plots, thresh=threshold)
+
+
 
 if __name__ == '__main__':
 
+    column_threshold: float = 0.01
     # Define the model
     data_model = DataModel()
 
@@ -553,34 +576,17 @@ if __name__ == '__main__':
     # ----------------------------------------------
 
     pre_processing_params = {'scaler': MinMaxScaler(), 'test_size': 0.2, 'z_value': 3, 'outlier_filter': 'iqr'}
-    data_model.pre_process_data(**pre_processing_params, columns='all')
+    data_model.pre_process_data(**pre_processing_params, input_columns='all')
 
-    data_model.compute_correlation()
-    data_model.plot_correlation_matrix(save_path=os.path.join(path_corr_matrix, 'correlation_matrix.png'),
-                                       show_plot=True)
+    #data_model.plot_data_exploration(data_dir=os.path.join(data_path, 'results', 'data_exploration_full'), threshold=column_threshold)
 
-    for column in data_model.input_data.columns:
-        filename_2d_corr = f'{column}_2d_correlation.png'
-        filename_distribution = f'{column}_distribution.png'
-        filename_boxplot = f'{column}_boxplot.png'
-
-        data_model.compute_2d_correlation(column, save_path=os.path.join(path_2d_corr, filename_2d_corr),
-                                          show_plot=show_plots)
-
-        data_model.plot_distribution(column, save_path=os.path.join(path_distribution, filename_distribution),
-                                     show_plot=show_plots)
-
-        data_model.plot_boxplots(column, save_path=os.path.join(path_boxplots, filename_boxplot), show_plot=show_plots,
-                                 showfliers=False)
-
-    data_model.plot_r2(save_path=os.path.join(path_r2, 'r2.png'), show_plot=show_plots)
     # ----------------------------------------------
     # --  Select the relevant columns             --
     # ----------------------------------------------
 
-    data_model.filter_columns(threshold=0.1, model_params=pre_processing_params)
+    data_model.filter_columns(threshold=column_threshold, model_params=pre_processing_params)
 
     # Repeat the pre-processing step with the selected columns
 
     data_model.export_data(cnn_data_path)
-    data_model.plot_output_distribution(save_path=path_distribution)
+    data_model.plot_data_exploration(data_dir=os.path.join(data_path, 'results', 'data_exploration_cols'), threshold=column_threshold)
