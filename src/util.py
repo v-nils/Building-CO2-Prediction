@@ -72,3 +72,14 @@ def fit_transform_df(df: pd.DataFrame, scaler: object = StandardScaler) -> pd.Da
     """
 
     return pd.DataFrame(scaler.fit_transform(df), columns=df.columns, index=df.index)
+
+def transform_df(df: pd.DataFrame, scaler: object = StandardScaler) -> pd.DataFrame:
+    """
+    Transform a DataFrame using a scaler object.
+
+    :param df: (pd.DataFrame) DataFrame to transform
+    :param scaler: (object) Scaler object
+    :return: (pd.DataFrame) Scaled DataFrame
+    """
+
+    return pd.DataFrame(scaler.transform(df), columns=df.columns, index=df.index)

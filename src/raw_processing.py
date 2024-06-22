@@ -30,40 +30,46 @@ save_path_energy: str = os.path.join(root_path, r'data\pre_processed\energy_outp
 
 input_.to_csv(save_path_bef)
 output_.to_csv(save_path_energy)
+"""
 
-
-data_path = '../data/pre_processed/in_and_out_filled_vol.csv'
-outfile = '../data/pre_processed/bef_energy_data.csv'
+data_path = '../data/pre_processed/interpolated_ds.csv'
+outfile = '../data/pre_processed/full_ds.csv'
 data = pd.read_csv(data_path)
 
-if 'lot_area' in data.columns and 'building_area' in data.columns:
-    data.loc[:, 'lot_bldg_ratio'] = data['building_area'] / data['lot_area']
+# Calculate the new columns
+if 'lotarea' in data.columns and 'bldgarea' in data.columns:
+    data['lotbldgratio'] = data['bldgarea'] / data['lotarea']
 
-# Floor area ratio
-if 'building_area' in data.columns and 'num_floors' in data.columns:
-    data.loc[:, 'floor_area_ratio'] = data['building_area'] / data[
-        'num_floors']
+if 'bldgarea' in data.columns and 'numfloors' in data.columns:
+    data['floorarearatio'] = data['bldgarea'] / data['numfloors']
 
-# Area per unit
-if 'total_units' in data.columns and 'building_area' in data.columns:
-    data.loc[:, 'unit_area'] = data['building_area'] / data['total_units']
+if 'unitstotal' in data.columns and 'bldgarea' in data.columns:
+    data['unitarea'] = data['bldgarea'] / data['unitstotal']
 
-# Ratio residential to commercial area
-if 'residential_area' in data.columns and 'building_area' in data.columns:
-    data.loc[:, 'res_ratio'] = data['residential_area'] / data[
-        'building_area']
+if 'resarea' in data.columns and 'bldgarea' in data.columns:
+    data['resratio'] = data['resarea'] / data['bldgarea']
 
-# Ration commercial area to total area
-if 'commercial_area' in data.columns and 'building_area' in data.columns:
-    data.loc[:, 'com_ratio'] = data['commercial_area'] / data[
-        'building_area']
+if 'comarea' in data.columns and 'bldgarea' in data.columns:
+    data['comratio'] = data['comarea'] / data['bldgarea']
 
-# Ratio of residential area to total area
-if 'SArea' in data.columns and 'Volume' in data.columns:
-    data.loc[:, 'sarea_volume_ratio'] = data['SArea'] / data['Volume']
+if 'sarea' in data.columns and 'volume' in data.columns:
+    data['sareavolumeratio'] = data['sarea'] / data['volume']
+
+# Insert the new columns at specific positions
+data.insert(10, 'lotbldgratio', data.pop('lotbldgratio'))
+data.insert(11, 'floorarearatio', data.pop('floorarearatio'))
+data.insert(12, 'unitarea', data.pop('unitarea'))
+data.insert(13, 'resratio', data.pop('resratio'))
+data.insert(14, 'comratio', data.pop('comratio'))
+data.insert(15, 'sareavolumeratio', data.pop('sareavolumeratio'))
+data.drop(columns=['irrlotcode'], inplace=True)
 
 
-data.to_csv(outfile, index=False)"""
+
+print(data.columns)
+
+
+data.to_csv(outfile, index=False)
 
 
 def convert_columns_to_valid_dbnames(list_of_columns):
@@ -102,18 +108,3 @@ def convert_columns_to_valid_dbnames(list_of_columns):
 
     return new_list
 
-
-df = pd.read_csv(r'C:\Users\nilse\Documents\projects\LBS\data\raw\energy_data_filtered.csv', encoding='latin1', index_col=False)
-
-old_cols = df.columns
-
-cols = convert_columns_to_valid_dbnames(list(old_cols))
-col_dict = dict(zip(old_cols, cols))
-print(col_dict)
-df.rename(columns=col_dict, inplace=True)
-print(df.head())
-df.loc[df['property_gfa___self_reported__ft__'].isin(['No', 'Yes']), 'property_gfa___self_reported__ft__'] = np.nan
-df[df['parent_property_id'] == '4926122, 15143466'] = np.nan
-df[df['natural_gas_use__kbtu_'] == 'Insufficient access'] = np.nan
-
-df.to_csv(r'C:\Users\nilse\Documents\projects\LBS\data\raw\energy_data_filtered_utf8.csv', columns=cols, index=False, encoding='UTF-8')
