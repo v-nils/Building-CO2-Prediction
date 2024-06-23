@@ -98,9 +98,9 @@ class NN(nn.Module):
         Initialize the NN model.
         """
         super(NN, self).__init__()
-        self.conv1 = nn.Conv1d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.conv1 = nn.Conv1d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1)
         #self.fc1 = nn.Linear(input_shape[1], 5)
-        self.fc2 = nn.Linear(32, 1)
+        self.fc2 = nn.Linear(39, 1)
         self.fc3 = nn.Linear(16, 1)
         self.relu = nn.ReLU()
 
@@ -113,6 +113,7 @@ class NN(nn.Module):
         :return: Output tensor.
         """
         x = self.conv1(x)
+        x = x.view(x.size(0), -1)
         x = self.fc2(x)
         x = self.relu(x)
         return x
