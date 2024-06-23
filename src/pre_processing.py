@@ -20,6 +20,9 @@ from pandas import DataFrame, Series
 from sympy.core.numbers import NegativeOne
 
 from src.util import match_df, remove_outliers_zscore, remove_outliers_iqr, fit_transform_df, transform_df
+import warnings
+
+warnings.filterwarnings("ignore")
 
 plt.style.use(['science', 'ieee'])
 
@@ -30,7 +33,7 @@ root_path: str = os.path.dirname(os.path.dirname(project_path))
 use_output_column: list[str] = ['e_total_site_energy_use_kbtu']
 output_label = 'Total energy consumption' if use_output_column == 'e_total_site_energy_use_kbtu' else 'Normalized energy consumption'
 
-bef_dict: dict[str, str] = {
+bef_dict = {
     "bbl": "BBL",
     "lotarea": "Lot area",
     "bldgarea": "Building area",
@@ -55,11 +58,18 @@ bef_dict: dict[str, str] = {
     "resratio": "Residential ratio",
     "comratio": "Commercial ratio",
     "sareavolumeratio": "Surface/volume ratio",
+    "sareabldgratio": "Surface/building ratio",
+    "sarealotratio": "Surface/lot ratio",
+    "volumebldgratio": "Volume/building ratio",
+    "volumelotratio": "Volume/lot ratio",
     "assessland": "Land assessment",
+    "assesstot": "Total assessment",
     "proxcode": "Proximity code",
-    "irrlotcode": "Irregular lot code",
     "yearbuilt": "Year built",
     "yearaltered": "Year altered",
+    "irrlotcode": "Irregular lot code",
+    "lottype": "Lot type",
+    "bsmtcode": "Basement code",
     "builtfar": "Built FAR",
     "residfar": "Residential FAR",
     "commfar": "Commercial FAR",
@@ -75,7 +85,6 @@ bef_dict: dict[str, str] = {
     "total_ghg_emissions_metric_tons_co2e": "Total GHG emissions (metric tons CO$_2$e)",
     "total_ghg_emissions_intensity_kgco2e_ft": "Total GHG emissions intensity (kgCO$_2$e/ft$^2$)"
 }
-
 
 
 data_path: str = os.path.join(root_path, 'data')
@@ -125,7 +134,7 @@ class DataModel:
                          z_value: float = 3.,
                          outlier_filter: str = 'zscore',
                          input_columns: list[str] | str = 'all',
-                         output_columns: str = 'weather_normalized_site_energy_use_kbtu') -> None:
+                         output_columns: str = 'total_ghg_emissions_metric_tons_co2e') -> None:
         """
         Function to pre-process the input data including:
         - Filtering columns
@@ -155,12 +164,12 @@ class DataModel:
             if self.processing_data[column].dtype != 'float64' and self.processing_data[column].dtype != 'int64':
                 print(f'Column {column} is of type {self.processing_data[column].dtype}')
 
-        self.processing_data = self.processing_data.replace([float('inf'), float('-inf')], pd.NA)
+        self.processing_data = self.processing_data.replace([np.inf, -np.inf], np.nan)
 
         self.processing_data = self.processing_data[~(self.df.isnull().any(axis=1))]
 
         if outlier_filter == 'iqr':
-            self.processing_data = remove_outliers_iqr(self.processing_data, q1=0.25, q2=0.75, axis=1)
+            self.processing_data = remove_outliers_iqr(self.processing_data, q1=0.1, q2=0.9, axis=1)
         elif outlier_filter == 'zscore':
             self.processing_data = remove_outliers_zscore(self.processing_data, z_value, axis=1)
         else:
@@ -412,6 +421,7 @@ class DataModel:
             showfliers=showfliers)
 
         ax.set_ylabel(bef_dict[column], fontsize=16)
+        ax.set_yticks(ax.get_yticks())  # Add this line
         ax.set_yticklabels(ax.get_yticklabels(), fontsize=12)
 
         if save_path is not None:
@@ -503,6 +513,7 @@ class DataModel:
         ax.set_ylabel('R$^2$ magnitude [0, 1]', fontsize=20)
         ax.set_title('R$^2$ values for the features', fontsize=24)
 
+        ax.set_xticks(range(len(x_values)))  # Add this line
         ax.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=20)
         ax.axhline(y=thresh, color='red', linestyle='--', linewidth=1.5, label=f'Threshold: {thresh}')
 
@@ -564,10 +575,9 @@ class DataModel:
         self.plot_r2(save_path=os.path.join(path_r2, 'r2.png'), show_plot=show_plots, thresh=threshold)
 
 
-
 if __name__ == '__main__':
 
-    column_threshold: float = 0.01
+    column_threshold: float = 0.0001
     # Define the model
     data_model = DataModel()
 
@@ -575,7 +585,7 @@ if __name__ == '__main__':
     # --  Explorative Data Analysis (EDA)         --
     # ----------------------------------------------
 
-    pre_processing_params = {'scaler': MinMaxScaler(), 'test_size': 0.2, 'z_value': 3, 'outlier_filter': 'iqr'}
+    pre_processing_params = {'scaler': MinMaxScaler(), 'test_size': 0.2, 'z_value': 6, 'outlier_filter': 'iqr'}
     data_model.pre_process_data(**pre_processing_params, input_columns='all')
 
     #data_model.plot_data_exploration(data_dir=os.path.join(data_path, 'results', 'data_exploration_full'), threshold=column_threshold)

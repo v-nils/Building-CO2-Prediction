@@ -55,6 +55,21 @@ if 'comarea' in data.columns and 'bldgarea' in data.columns:
 if 'sarea' in data.columns and 'volume' in data.columns:
     data['sareavolumeratio'] = data['sarea'] / data['volume']
 
+if 'sarea' in data.columns and 'bldgarea' in data.columns:
+    data['sareabldgratio'] = data['sarea'] / data['bldgarea']
+
+if 'sarea' in data.columns and 'lotarea' in data.columns:
+    data['sarealotratio'] = data['sarea'] / data['lotarea']
+
+if 'volume' in data.columns and 'bldgarea' in data.columns:
+    data['volumebldgratio'] = data['volume'] / data['bldgarea']
+
+if 'volume' in data.columns and 'lotarea' in data.columns:
+    data['volumelotratio'] = data['volume'] / data['lotarea']
+
+
+
+
 # Insert the new columns at specific positions
 data.insert(10, 'lotbldgratio', data.pop('lotbldgratio'))
 data.insert(11, 'floorarearatio', data.pop('floorarearatio'))
@@ -62,7 +77,12 @@ data.insert(12, 'unitarea', data.pop('unitarea'))
 data.insert(13, 'resratio', data.pop('resratio'))
 data.insert(14, 'comratio', data.pop('comratio'))
 data.insert(15, 'sareavolumeratio', data.pop('sareavolumeratio'))
-data.drop(columns=['irrlotcode'], inplace=True)
+data.insert(16, 'sareabldgratio', data.pop('sareabldgratio'))
+data.insert(17, 'sarealotratio', data.pop('sarealotratio'))
+data.insert(18, 'volumebldgratio', data.pop('volumebldgratio'))
+data.insert(19, 'volumelotratio', data.pop('volumelotratio'))
+
+#data.drop(columns=['irrlotcode'], inplace=True)
 
 
 

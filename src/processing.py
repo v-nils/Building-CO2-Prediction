@@ -98,13 +98,10 @@ class NN(nn.Module):
         Initialize the NN model.
         """
         super(NN, self).__init__()
-        self.fc1 = nn.Linear(input_shape[1], 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.conv1 = nn.Conv1d(64, 64, 3)
-        self.fc3 = nn.Linear(64, 1)
+        self.fc1 = nn.Linear(input_shape[1], 5)
+        self.fc2 = nn.Linear(5, 1)
+        self.fc3 = nn.Linear(16, 1)
         self.relu = nn.ReLU()
-        self.input_shape = input_shape
-        self.dropout = nn.Dropout(0.5)
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -116,13 +113,7 @@ class NN(nn.Module):
         """
         x = self.fc1(x)
         x = self.fc2(x)
-        x = self.relu(self.conv1(x))
-        x = self.dropout(x)
-        x = self.fc3(x)
         x = self.relu(x)
-
-
-
         return x
 
 
@@ -200,7 +191,7 @@ class ModelTrainer:
         all_outputs = np.concatenate(all_outputs)
         all_indices = np.concatenate(all_indices)
 
-        return loss, all_outputs, all_targets, all_indices
+        return loss, all_outputs.reshape(-1,), all_targets, all_indices
 
     def save_model(self, save_path: str):
         """
@@ -353,7 +344,7 @@ def rescale(scaler_path: str, test_outputs: np.ndarray, test_targets: np.ndarray
     :return: Tuple of rescaled outputs and targets.
     """
     scaler = joblib.load(scaler_path)
-    shape = scaler.min_.shape[0] - 1
+    shape = scaler.scale_.shape[0] - 1
 
     _zero_cols = np.zeros((test_outputs.shape[0], shape))
     _test_targets = np.hstack((_zero_cols, test_targets.reshape(-1, 1)))
@@ -388,8 +379,8 @@ def main():
 
     model = NN(X_train_tensor.shape).to(device)
     criterion = nn.SmoothL1Loss()
-    optimizer = optim.RMSprop(model.parameters(), lr=5e-6) # Adam
-    trainer = ModelTrainer(model, criterion, optimizer, num_epochs=75, device=device)
+    optimizer = optim.Adam(model.parameters(), lr=1e-5)  # Adam
+    trainer = ModelTrainer(model, criterion, optimizer, num_epochs=50, device=device)
     trainer.train(train_loader, test_loader)
 
     # Evaluate on the test set
