@@ -8,10 +8,11 @@ import scienceplots
 plt.style.use(['science', 'ieee'])
 
 # Load the dataset
-file_path = '../data/pre_processed/processing_dataset.csv'
+file_path = '../data/pre_processed/processing_dataset_1.csv'
 out_path = '../data/pre_processed/interpolated_ds.csv'
 plot_path = '../data/results/interpolation/interpolation.png'
 data = pd.read_csv(file_path)
+
 
 print(data.columns)
 
