@@ -88,7 +88,6 @@ data.insert(19, 'volumelotratio', data.pop('volumelotratio'))
 
 print(data.columns)
 
-
 data.to_csv(outfile, index=False)
 
 

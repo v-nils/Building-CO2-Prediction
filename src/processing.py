@@ -98,12 +98,13 @@ class NN(nn.Module):
         Initialize the NN model.
         """
         super(NN, self).__init__()
-        self.fc1 = nn.Linear(input_shape[1], 6)
-        self.fc2 = nn.Linear(6, 6)
-        self.fc3 = nn.Linear(6, 1)
-        self.dropout1 = nn.Dropout(0.2)
+        self.fc1 = nn.Linear(input_shape[1], 512)
+        self.fc2 = nn.Linear(512, 16)
+        self.fc3 = nn.Linear(16, 1)
+        self.dropout1 = nn.Dropout(0.5)
         self.dropout2 = nn.Dropout(0.1)
         self.relu = nn.ReLU()
+        self.tanh = nn.Tanh()
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -114,14 +115,12 @@ class NN(nn.Module):
         :return: Output tensor.
         """
 
-        x = self.fc1(x)
+        x = self.relu(self.fc1(x))
         x = self.dropout1(x)
         x = self.fc2(x)
         x = self.relu(x)
         x = self.dropout2(x)
-        x = self.fc2(x)
-        x = self.fc3(x)
-        x = self.relu(x)
+        x = self.relu(self.fc3(x))
         return x
 
 
@@ -386,9 +385,10 @@ def main():
     #cross_validate_model(NN, X_train_tensor, y_train_tensor, train_indices, epochs=20,  n_splits=3, lr=5e-6)
 
     model = NN(X_train_tensor.shape).to(device)
-    criterion = nn.SmoothL1Loss()
+    criterion = nn.SmoothL1Loss()  # SmoothL1Loss()
+    #criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-5)  # Adam
-    trainer = ModelTrainer(model, criterion, optimizer, num_epochs=50, device=device)
+    trainer = ModelTrainer(model, criterion, optimizer, num_epochs=80, device=device)
     trainer.train(train_loader, test_loader)
 
     # Evaluate on the test set
