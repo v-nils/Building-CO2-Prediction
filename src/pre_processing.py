@@ -7,7 +7,10 @@ import numpy as np
 from dataclasses import dataclass
 import pandas as pd
 import os
+
+from sklearn.decomposition import PCA
 from sklearn.linear_model import Lasso, Ridge
+from src.models.dictionary import get_dict
 from scipy import stats
 from scipy.stats import linregress
 from sklearn.metrics import r2_score
@@ -33,59 +36,7 @@ root_path: str = os.path.dirname(os.path.dirname(project_path))
 use_output_column: list[str] = ['e_total_site_energy_use_kbtu']
 output_label = 'Total energy consumption' if use_output_column == 'e_total_site_energy_use_kbtu' else 'Normalized energy consumption'
 
-bef_dict = {
-    "bbl": "BBL",
-    "lotarea": "Lot area",
-    "bldgarea": "Building area",
-    "comarea": "Commercial area",
-    "resarea": "Residential area",
-    "officearea": "Office area",
-    "retailarea": "Retail area",
-    "garagearea": "Garage area",
-    "strgearea": "Storage area",
-    "factryarea": "Factory area",
-    "otherarea": "Other area",
-    "numbldgs": "Number of buildings",
-    "numfloors": "Number of floors",
-    "unitstotal": "Total units",
-    "lotfront": "Lot frontage",
-    "lotdepth": "Lot depth",
-    "bldgfront": "Building frontage",
-    "bldgdepth": "Building depth",
-    "lotbldgratio": "Lot/building ratio",
-    "floorarearatio": "Floor area ratio",
-    "unitarea": "Unit area",
-    "resratio": "Residential ratio",
-    "comratio": "Commercial ratio",
-    "sareavolumeratio": "Surface/volume ratio",
-    "sareabldgratio": "Surface/building ratio",
-    "sarealotratio": "Surface/lot ratio",
-    "volumebldgratio": "Volume/building ratio",
-    "volumelotratio": "Volume/lot ratio",
-    "assessland": "Land assessment",
-    "assesstot": "Total assessment",
-    "proxcode": "Proximity code",
-    "yearbuilt": "Year built",
-    "yearaltered": "Year altered",
-    "irrlotcode": "Irregular lot code",
-    "lottype": "Lot type",
-    "bsmtcode": "Basement code",
-    "builtfar": "Built FAR",
-    "residfar": "Residential FAR",
-    "commfar": "Commercial FAR",
-    "facilfar": "Facility FAR",
-    "shape_area": "Shape area",
-    "z_min": "Min elevation",
-    "z_max": "Max elevation",
-    "z_mean": "Mean elevation",
-    "sarea": "Surface area",
-    "volume": "Volume",
-    "weather_normalized_site_energy_use_kbtu": "Weather normalized site energy use (kBTU)",
-    "weather_normalized_site_eui_kbtu_ft": "Weather normalized site EUI (kBTU/ft$^2$)",
-    "total_ghg_emissions_metric_tons_co2e": "Total GHG emissions (metric tons CO$_2$e)",
-    "total_ghg_emissions_intensity_kgco2e_ft": "Total GHG emissions intensity (kgCO$_2$e/ft$^2$)"
-}
-
+bef_dict = get_dict()
 
 data_path: str = os.path.join(root_path, 'data')
 
@@ -123,6 +74,8 @@ class DataModel:
     def __post_init__(self):
 
         self.df: pd.DataFrame = pd.read_csv(_data_path, delimiter=',', index_col=0)
+        self.df = self.df[self.df['resratio'] > 0.9]
+        print("Loaded data columns: ", self.df.columns)
 
     def load_data(self, path_in: str, path_out: str) -> None:
         self.input_data = pd.read_csv(path_in, index_col='bbl')
@@ -134,7 +87,7 @@ class DataModel:
                          z_value: float = 3.,
                          outlier_filter: str = 'zscore',
                          input_columns: list[str] | str = 'all',
-                         output_columns: str = 'total_ghg_emissions_metric_tons_co2e') -> None:
+                         output_columns: str = 'weather_normalized_site_eui_kbtu_ft') -> None:
         """
         Function to pre-process the input data including:
         - Filtering columns
@@ -155,7 +108,7 @@ class DataModel:
         init_number_of_rows: int = len(self.df)
 
         if input_columns == 'all':
-            self.processing_data = pd.concat([self.df.iloc[:, :-4], self.df[[output_columns]]], axis=1)
+            self.processing_data = pd.concat([self.df.iloc[:, :45], self.df[[output_columns]]], axis=1)
         else:
             self.processing_data = pd.concat([self.df[input_columns], self.df[[output_columns]]], axis=1)
 
@@ -169,7 +122,7 @@ class DataModel:
         self.processing_data = self.processing_data[~(self.df.isnull().any(axis=1))]
 
         if outlier_filter == 'iqr':
-            self.processing_data = remove_outliers_iqr(self.processing_data, q1=0.1, q2=0.9, axis=1)
+            self.processing_data = remove_outliers_iqr(self.processing_data, q1=0.2, q2=0.8, axis=1)
         elif outlier_filter == 'zscore':
             self.processing_data = remove_outliers_zscore(self.processing_data, z_value, axis=1)
         else:
@@ -189,6 +142,11 @@ class DataModel:
         joblib.dump(scaler, os.path.join(scaler_data_path, 'scaler.pkl'))
 
         self.data_scaled = pd.concat([self.train, self.test], axis=0)
+
+        # Perform a PCA
+
+
+
 
         print('---------------------------------')
         print('-- Data Pre-processing Summary --')
@@ -577,7 +535,7 @@ class DataModel:
 
 if __name__ == '__main__':
 
-    column_threshold: float = 0.0001
+    column_threshold: float = 0.05
     # Define the model
     data_model = DataModel()
 
@@ -585,7 +543,7 @@ if __name__ == '__main__':
     # --  Explorative Data Analysis (EDA)         --
     # ----------------------------------------------
 
-    pre_processing_params = {'scaler': MinMaxScaler(), 'test_size': 0.2, 'z_value': 6, 'outlier_filter': 'iqr'}
+    pre_processing_params = {'scaler': MinMaxScaler(), 'test_size': 0.1, 'z_value': 4.5, 'outlier_filter': 'zscore'}
     data_model.pre_process_data(**pre_processing_params, input_columns='all')
 
     #data_model.plot_data_exploration(data_dir=os.path.join(data_path, 'results', 'data_exploration_full'), threshold=column_threshold)
