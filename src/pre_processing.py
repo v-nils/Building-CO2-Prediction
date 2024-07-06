@@ -34,8 +34,7 @@ project_path: str = os.path.abspath(__file__)
 root_path: str = os.path.dirname(os.path.dirname(project_path))
 
 use_output_column: list[str] = ['e_total_site_energy_use_kbtu']
-output_label = 'Total energy consumption' if use_output_column == 'e_total_site_energy_use_kbtu' else 'Normalized energy consumption'
-
+output_label = 'Total GHG-emission'
 bef_dict = get_dict()
 
 data_path: str = os.path.join(root_path, 'data')
@@ -290,7 +289,7 @@ class DataModel:
                 label='Ridge (L1) regression - Slope: {:.2f}'.format(np.round(slope, 2)))
 
         ax.set_xlabel(bef_dict[x], fontsize=20)
-        ax.set_ylabel(output_label, fontsize=20)
+        ax.set_ylabel('Total GHG-emissions', fontsize=20)
         ax.set_title('${}^{}$={}'.format('R', 2, np.round(r_2, 3)), fontsize=24)
 
         ax.tick_params(axis='both', colors='black', labelsize=12)
@@ -535,7 +534,7 @@ class DataModel:
 
 if __name__ == '__main__':
 
-    column_threshold: float = 0.05
+    column_threshold: float = 0.015
     # Define the model
     data_model = DataModel()
 
@@ -543,7 +542,7 @@ if __name__ == '__main__':
     # --  Explorative Data Analysis (EDA)         --
     # ----------------------------------------------
 
-    pre_processing_params = {'scaler': MinMaxScaler(), 'test_size': 0.1, 'z_value': 4.5, 'outlier_filter': 'zscore'}
+    pre_processing_params = {'scaler': MinMaxScaler(), 'test_size': 0.1, 'z_value': 4.5, 'outlier_filter': 'iqr'}
     data_model.pre_process_data(**pre_processing_params, input_columns='all')
 
     #data_model.plot_data_exploration(data_dir=os.path.join(data_path, 'results', 'data_exploration_full'), threshold=column_threshold)
